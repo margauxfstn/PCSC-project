@@ -1,0 +1,18 @@
+# Minimal Doxygen configuration (other options keep their default value).
+# Generate with:  doxygen Doxyfile   (or: cmake --build build --target doc)
+PROJECT_NAME           = "PCSC project 3: non-linear systems"
+PROJECT_BRIEF          = "Root finding: bisection, Newton, chord, fixed point, Aitken"
+OUTPUT_DIRECTORY       = docs
+INPUT                  = README.md include src tests
+FILE_PATTERNS          = *.hpp *.cpp *.md
+RECURSIVE              = YES
+USE_MDFILE_AS_MAINPAGE = README.md
+EXTRACT_ALL            = YES
+EXTRACT_PRIVATE        = YES
+EXTRACT_STATIC         = YES
+GENERATE_HTML          = YES
+GENERATE_LATEX         = NO
+HAVE_DOT               = NO
+CLASS_GRAPH            = YES
+QUIET                  = YES
+WARN_IF_UNDOCUMENTED   = YES

@@ -1,50 +1,44 @@
-//
-// Created by marga on 13/11/2026.
-//
+/**
+ * @file test_bisection.cpp
+ * @brief Tests of the bisection method.
+ */
 
 #include <cmath>
-#include <iostream>
 
 #include "Bisection.hpp"
 #include "Exceptions.hpp"
-#include "Function.hpp"
-
-static int failures = 0;
-
-#define CHECK(cond)                                                            \
-  do {                                                                         \
-    if (!(cond)) {                                                             \
-      std::cerr << "FAILED: " #cond " (line " << __LINE__ << ")\n";            \
-      ++failures;                                                              \
-    }                                                                          \
-  } while (0)
+#include "TestUtils.hpp"
 
 int main() {
-    LambdaFunction f([](double x) { return x * x - 2.0; });
+    const auto f = LambdaFunction::scalar([](double x) { return x * x - 2.0; });
 
-    // known root: sqrt(2)
-    Bisection b(0.0, 2.0, 1e-10, 100);
-    const Result r = b.solve(f);
-    CHECK(r.converged);
-    CHECK(std::abs(r.root - std::sqrt(2.0)) < 1e-9);
+    // Known root sqrt(2), within the tolerance.
+    Bisection solver(0.0, 2.0, 1e-10, 100);
+    const Result r = solver.solve(f);
+    CHECK(r.converged());
+    CHECK_NEAR(r.root(0), std::sqrt(2.0), 1e-9);
 
-    // same solver object can be reused
-    const Result r2 = b.solve(f);
+    // The error bound halves at each step: about log2((b-a)/tol) iterations.
+    CHECK(r.iterations <= 36);
+
+    // The same solver object can be reused and gives the same result.
+    const Result r2 = solver.solve(f);
     CHECK(r2.iterations == r.iterations);
 
-    // invalid interval: no sign change
-    bool thrown = false;
-    try {
-        Bisection bad(2.0, 3.0, 1e-10, 100);
-        bad.solve(f);
-    } catch (const InvalidInterval &) {
-        thrown = true;
-    }
-    CHECK(thrown);
+    // Root exactly at the midpoint: detected at once.
+    const auto g = LambdaFunction::scalar([](double x) { return x - 1.0; });
+    CHECK(Bisection(0.0, 2.0, 1e-10, 100).solve(g).iterations == 0);
 
-    // too few iterations: must report non-convergence
-    Bisection few(0.0, 2.0, 1e-14, 3);
-    CHECK(!few.solve(f).converged);
+    // Invalid inputs.
+    CHECK_THROWS(Bisection(2.0, 3.0, 1e-10, 100).solve(f), InvalidInterval); // no sign change
+    CHECK_THROWS(Bisection(1.0, 1.0, 1e-10, 100), InvalidInterval);          // a == b
+    const LambdaFunction f2(2, 2, [](const Vector &x) { return x; });
+    CHECK_THROWS(Bisection(0.0, 1.0, 1e-10, 100).solve(f2), DimensionError);  // not scalar
 
-    return failures == 0 ? 0 : 1;
+    // Too few iterations: reported, not thrown.
+    const Result few = Bisection(0.0, 2.0, 1e-14, 3).solve(f);
+    CHECK(few.status == Status::MaxIterationsReached);
+    CHECK(few.iterations == 3);
+
+    return report("test_bisection");
 }

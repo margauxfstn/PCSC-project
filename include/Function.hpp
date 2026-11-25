@@ -1,49 +1,83 @@
-//
-// Created by marga on 13/11/2026.
-//
+/**
+ * @file Function.hpp
+ * @brief Abstract function f : R^n -> R^m and a lambda-based implementation.
+ */
 
 #ifndef PCSCPROJECT_FUNCTION_HPP
 #define PCSCPROJECT_FUNCTION_HPP
 
 #include <functional>
-#include <utility>
 
-#include "Exceptions.hpp"
+#include "Types.hpp"
 
-/// Scalar real function f(x), with an optional analytical derivative.
+/**
+ * @brief Abstract vector function f : R^n -> R^m.
+ *
+ * Only the evaluation is mandatory. The Jacobian is optional: methods that
+ * do not need it (bisection, fixed point) never ask for it, and methods that
+ * need it get it through a JacobianStrategy, which can either call
+ * jacobian() or approximate it by finite differences.
+ */
 class Function {
 public:
+    /// @param inputDim  n, size of x
+    /// @param outputDim m, size of f(x)
+    /// @throws DimensionError if a dimension is not positive
+    Function(int inputDim, int outputDim);
+
+    /// Virtual destructor: required in any polymorphic base class, so that
+    /// deleting a derived object through a Function pointer is correct.
     virtual ~Function() = default;
 
-    /// Evaluates f at x.
-    virtual double operator()(double x) const = 0;
+    /// Evaluates f(x). @p x must have size inputDim().
+    virtual Vector operator()(const Vector &x) const = 0;
 
-    /// Evaluates f'(x). Throws DerivativeError if not provided.
-    virtual double derivative(double /*x*/) const {
-        throw DerivativeError("this function has no analytical derivative");
-    }
+    /// True if jacobian() is implemented by this function.
+    virtual bool hasJacobian() const { return false; }
+
+    /// Analytical Jacobian J(x) (m x n matrix, J_ij = df_i/dx_j).
+    /// @throws DerivativeError by default (no analytical Jacobian).
+    virtual Matrix jacobian(const Vector &x) const;
+
+    int inputDim() const { return inputDim_; }   ///< n
+    int outputDim() const { return outputDim_; } ///< m
+    /// True for a scalar function R -> R.
+    bool isScalar() const { return inputDim_ == 1 && outputDim_ == 1; }
+
+private:
+    int inputDim_;
+    int outputDim_;
 };
 
-/// Function built from lambdas / std::function.
+/**
+ * @brief Function defined by C++ callables (lambdas, std::function).
+ *
+ * Example (scalar case):
+ * @code
+ * auto f = LambdaFunction::scalar([](double x) { return x * x - 2.0; },
+ *                                 [](double x) { return 2.0 * x; });
+ * @endcode
+ */
 class LambdaFunction : public Function {
 public:
-    using Fn = std::function<double(double)>;
+    using Fn = std::function<Vector(const Vector &)>;    ///< x -> f(x)
+    using JacobianFn = std::function<Matrix(const Vector &)>; ///< x -> J(x)
+    using ScalarFn = std::function<double(double)>;      ///< x -> f(x) in R
 
-    explicit LambdaFunction(Fn f, Fn df = nullptr)
-        : f_(std::move(f)), df_(std::move(df)) {}
+    /// @param jacobian may be empty: then hasJacobian() is false.
+    LambdaFunction(int inputDim, int outputDim, Fn f, JacobianFn jacobian = nullptr);
 
-    double operator()(double x) const override { return f_(x); }
+    /// Builds a scalar function R -> R from double -> double callables.
+    /// @param df derivative, may be empty.
+    static LambdaFunction scalar(ScalarFn f, ScalarFn df = nullptr);
 
-    double derivative(double x) const override {
-        if (!df_) {
-            return Function::derivative(x); // throws
-        }
-        return df_(x);
-    }
+    Vector operator()(const Vector &x) const override;
+    bool hasJacobian() const override { return static_cast<bool>(jacobian_); }
+    Matrix jacobian(const Vector &x) const override;
 
 private:
     Fn f_;
-    Fn df_;
+    JacobianFn jacobian_;
 };
 
-#endif //PCSCPROJECT_FUNCTION_HPP
+#endif // PCSCPROJECT_FUNCTION_HPP
